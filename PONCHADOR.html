@@ -197,7 +197,18 @@
 
   <button id="btnBackToLogin" style="margin-top:2rem;">Volver al login</button>
 </div>
-
+<div id="ponchesModal" class="modal hidden">
+  <div class="modal-content">
+    <span class="close-modal" id="closePonchesModal">×</span>
+    <h3 id="ponchesTitle">Ponches del usuario</h3>
+    <table>
+      <thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Efectivas</th><th>Extras</th></tr></thead>
+      <tbody id="ponchesBody"></tbody>
+    </table>
+    <div id="noPonches" class="no-data hidden">Este usuario aún no tiene registros de ponche.</div>
+  </div>
+</div>
+  
 <!-- Modal ponches -->
 <div id="ponchesModal" class="modal hidden">
   <div class="modal-content">
