@@ -1,0 +1,395 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#ffffff">
+
+  <title>Ponchador - Jeneufry (80764)</title>
+
+  <style>
+    :root {
+      --primary: #28a745;
+      --warning: #fd7e14;
+      --danger: #dc3545;
+      --dark: #343a40;
+      --light: #f8f9fa;
+      --padding: 1.5rem;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--light);
+      color: #333;
+      min-height: 100vh;
+      line-height: 1.5;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+
+    header {
+      background: linear-gradient(135deg, #1a3c5e, #2c5282);
+      color: white;
+      padding: 1.2rem 1rem;
+      text-align: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+
+    header h1 { font-size: clamp(1.4rem, 5vw, 1.8rem); margin-bottom: 0.3rem; }
+
+    header .info-personal { font-size: clamp(1rem, 4vw, 1.2rem); opacity: 0.9; }
+
+    header .codigo { font-weight: bold; color: #ffd700; font-size: 1.1em; }
+
+    .card {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      margin: 1rem;
+      padding: var(--padding);
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .info, .diag {
+      background: #e9f5ff;
+      padding: 1rem;
+      border-radius: 12px;
+      margin: 1rem 0;
+      font-size: 0.95rem;
+    }
+
+    .diag { background: #fff3cd; color: #664d03; }
+
+    .buttons {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+
+    button {
+      flex: 1 1 140px;
+      padding: 1rem 1.5rem;
+      font-size: clamp(1rem, 4vw, 1.2rem);
+      font-weight: 600;
+      border: none;
+      border-radius: 12px;
+      color: white;
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+
+    button:active { transform: scale(0.97); }
+
+    #btnEntrada { background: var(--primary); }
+    #btnSalida  { background: var(--warning); }
+    #btnLimpiar { background: var(--danger); }
+
+    .resultado {
+      margin: 1.5rem 0;
+      padding: 1rem;
+      background: #f1f3f5;
+      border-radius: 12px;
+      font-size: 1.1rem;
+    }
+
+    .extras { color: #c82333; font-weight: bold; font-size: 1.3rem; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1.5rem;
+      font-size: 0.95rem;
+    }
+
+    th, td {
+      padding: 0.8rem;
+      text-align: center;
+      border-bottom: 1px solid #dee2e6;
+    }
+
+    th { background: var(--dark); color: white; }
+
+    @media (max-width: 480px) {
+      .card { margin: 0.8rem; padding: 1.2rem; }
+      .buttons { flex-direction: column; }
+      button { flex: 1 1 auto; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Ponchador Diario</h1>
+  <div class="info-personal">
+    Jeneufry Areche De Los Santos<br>
+    <strong>POP & SUMINISTROS</strong><br>
+    Código de Empleado: <span class="codigo">80764</span>
+  </div>
+</header>
+
+<div class="card">
+  <div class="info">
+    <strong>Jornada normal:</strong> 7 horas efectivas<br>
+    <strong>Break diario:</strong> 1 hora (se resta si tiempo total ≥ 5 h)
+  </div>
+
+  <div class="diag" id="diag">Estado de guardado: Cargando base de datos...</div>
+
+  <div class="buttons">
+    <button id="btnEntrada">ENTRADA</button>
+    <button id="btnSalida">SALIDA</button>
+    <button id="btnLimpiar">Limpiar todo</button>
+  </div>
+
+  <div id="estado" class="resultado"></div>
+
+  <div id="detalle" class="info resultado" style="display:none">
+    <div id="calculo"></div>
+  </div>
+
+  <table id="historial">
+    <thead>
+      <tr>
+        <th>Fecha</th>
+        <th>Entrada</th>
+        <th>Salida</th>
+        <th>Total</th>
+        <th>Efectivas</th>
+        <th>Extras</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script>
+// IndexedDB setup
+let db;
+const DB_NAME = "PonchadorJeneufry80764";
+const DB_VERSION = 1;
+const STORE_NAME = "registros";
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onerror = (event) => {
+      document.getElementById("diag").textContent = "Error al abrir base de datos";
+      reject(event.target.error);
+    };
+
+    request.onsuccess = (event) => {
+      db = event.target.result;
+      document.getElementById("diag").textContent = "Guardado activado ✓ (IndexedDB)";
+      resolve(db);
+    };
+
+    request.onupgradeneeded = (event) => {
+      db = event.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: "fecha" });
+      }
+    };
+  });
+}
+
+function getAllRegistros() {
+  return new Promise((resolve) => {
+    if (!db) return resolve([]);
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => resolve([]);
+  });
+}
+
+function saveRegistro(reg) {
+  return new Promise((resolve) => {
+    if (!db) return resolve(false);
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    store.put(reg);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => resolve(false);
+  });
+}
+
+function clearAll() {
+  return new Promise((resolve) => {
+    if (!db) return resolve(false);
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    store.clear();
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => resolve(false);
+  });
+}
+
+// Lógica del ponchador
+const JORNADA_NORMAL = 7;
+const BREAK_HORAS = 1;
+const MIN_HORAS_PARA_BREAK = 5;
+
+const hoy = new Date().toLocaleDateString("es-DO", { year: 'numeric', month: '2-digit', day: '2-digit' });
+
+const entradaBtn = document.getElementById("btnEntrada");
+const salidaBtn = document.getElementById("btnSalida");
+const limpiarBtn = document.getElementById("btnLimpiar");
+const estadoDiv = document.getElementById("estado");
+const detalleDiv = document.getElementById("detalle");
+const calculoDiv = document.getElementById("calculo");
+const tbody = document.querySelector("#historial tbody");
+const diag = document.getElementById("diag");
+
+let registros = [];
+
+function formatearHora(fecha) {
+  return fecha.toLocaleTimeString("es-DO", { hour12: true, hour: "numeric", minute: "2-digit" });
+}
+
+function minutosDesdeMedianoche(fecha) {
+  return fecha.getHours() * 60 + fecha.getMinutes();
+}
+
+function calcularTodo(entrada, salida) {
+  let minEnt = minutosDesdeMedianoche(entrada);
+  let minSal = minutosDesdeMedianoche(salida);
+  if (minSal < minEnt) minSal += 1440;
+
+  let minutosTotal = minSal - minEnt;
+  let horasTotal = minutosTotal / 60;
+
+  let horasEfectivas = horasTotal;
+  let breakAplicado = false;
+
+  if (horasTotal >= MIN_HORAS_PARA_BREAK) {
+    horasEfectivas -= BREAK_HORAS;
+    breakAplicado = true;
+  }
+
+  let extras = Math.max(0, horasEfectivas - JORNADA_NORMAL);
+
+  return {
+    total: horasTotal.toFixed(2),
+    efectivas: horasEfectivas.toFixed(2),
+    extras: extras.toFixed(2),
+    breakAplicado
+  };
+}
+
+function mostrarHoy() {
+  const reg = registros.find(r => r.fecha === hoy);
+  if (!reg) {
+    estadoDiv.innerHTML = "Aún no has ponchado hoy";
+    detalleDiv.style.display = "none";
+    entradaBtn.disabled = false;
+    salidaBtn.disabled = true;
+    return;
+  }
+
+  let txt = "";
+  if (reg.entrada) txt += `Entrada: <b>${reg.entrada.hora}</b><br>`;
+  if (reg.salida) {
+    txt += `Salida: <b>${reg.salida.hora}</b><br>`;
+    const diff = calcularTodo(new Date(reg.entrada.full), new Date(reg.salida.full));
+
+    let calcTxt = `
+      Total en el trabajo: <b>${diff.total} h</b><br>
+      ${diff.breakAplicado ? `− ${BREAK_HORAS} h break<br>` : ''}
+      <b>${diff.efectivas} h efectivas</b><br>
+      − ${JORNADA_NORMAL} h jornada = 
+      <span class="extras">${diff.extras > 0 ? '+' + diff.extras : '0'} h extras</span>
+    `;
+
+    calculoDiv.innerHTML = calcTxt;
+    detalleDiv.style.display = "block";
+    salidaBtn.disabled = true;
+  } else {
+    salidaBtn.disabled = false;
+    detalleDiv.style.display = "none";
+  }
+
+  estadoDiv.innerHTML = txt;
+}
+
+function actualizarTabla() {
+  tbody.innerHTML = "";
+  [...registros]
+    .sort((a,b) => new Date(b.fecha) - new Date(a.fecha))
+    .forEach(r => {
+      if (!r.entrada || !r.salida) return;
+      const diff = calcularTodo(new Date(r.entrada.full), new Date(r.salida.full));
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${r.fecha}</td>
+        <td>${r.entrada.hora}</td>
+        <td>${r.salida.hora}</td>
+        <td>${diff.total} h</td>
+        <td>${diff.efectivas} h</td>
+        <td style="color:${diff.extras > 0 ? '#c82333' : '#28a745'}">
+          ${diff.extras > 0 ? '+' + diff.extras : '0'} h
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+}
+
+// Eventos
+entradaBtn.onclick = async () => {
+  const ahora = new Date();
+  let reg = registros.find(r => r.fecha === hoy) || { fecha: hoy, entrada: null, salida: null };
+  reg.entrada = { hora: formatearHora(ahora), full: ahora.toISOString() };
+
+  await saveRegistro(reg);
+  registros = await getAllRegistros();
+  mostrarHoy();
+  actualizarTabla();
+};
+
+salidaBtn.onclick = async () => {
+  const ahora = new Date();
+  const reg = registros.find(r => r.fecha === hoy);
+  if (!reg?.entrada) { alert("Primero registra la entrada"); return; }
+
+  reg.salida = { hora: formatearHora(ahora), full: ahora.toISOString() };
+
+  await saveRegistro(reg);
+  registros = await getAllRegistros();
+  mostrarHoy();
+  actualizarTabla();
+};
+
+limpiarBtn.onclick = async () => {
+  if (!confirm("¿Borrar TODOS los registros? (Código 80764)")) return;
+  await clearAll();
+  registros = [];
+  tbody.innerHTML = "";
+  mostrarHoy();
+  diag.textContent = "Registros borrados ✓";
+};
+
+// Inicio
+async function init() {
+  try {
+    await openDB();
+    registros = await getAllRegistros();
+    mostrarHoy();
+    actualizarTabla();
+  } catch (err) {
+    diag.textContent = "Error al iniciar guardado";
+  }
+}
+
+init();
+</script>
+</body>
+</html>
